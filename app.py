@@ -6,7 +6,6 @@ import os
 from werkzeug.utils import secure_filename
 from pyspark.sql import SparkSession
 import matplotlib.pyplot as plt
-import pandas as pd
 import pyspark.pandas as ps
 
 app = Flask(__name__, static_url_path="", static_folder="static", template_folder="templates")
@@ -30,6 +29,7 @@ UPLOAD_FOLDER = 'uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+# Create a SparkSession
 spark = SparkSession.builder.appName("CekatanBiz Tools Data Analyst").getOrCreate()
 
 @app.route('/', methods=['GET', 'POST'])
@@ -112,7 +112,14 @@ def upload_file():
     file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     file.save(file_path)
     
+    # Read the uploaded CSV file
     df = spark.read.csv(file_path, header=True, inferSchema=True)
+
+    # Filter data only for rows with non-null Salary values
+    df = df.filter(df["Salary"].isNotNull())
+
+    # Calculate the sum of salaries
+    total_salary = df.agg({"Salary": "sum"}).first()[0]
 
     column_name = request.form.get('column_name')
     if not column_name:
@@ -129,7 +136,7 @@ def upload_file():
         plt.savefig(pie_chart_path)
         plt.close()
 
-        return jsonify({'success': True, 'pie_chart_path': pie_chart_path})
+        return jsonify({'success': True, 'pie_chart_path': pie_chart_path, 'total_salary': total_salary})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
 
